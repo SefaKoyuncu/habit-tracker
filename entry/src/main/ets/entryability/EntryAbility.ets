@@ -1,17 +1,26 @@
 import { AbilityConstant, ConfigurationConstant, UIAbility, Want } from '@kit.AbilityKit';
 import { hilog } from '@kit.PerformanceAnalysisKit';
 import { window } from '@kit.ArkUI';
+import { SensorTrackingService } from '../core/services/SensorTrackingService';
+import { DatabaseService } from '../core/services/DatabaseService';
 
 const DOMAIN = 0x0000;
 
 export default class EntryAbility extends UIAbility {
-  onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
+  async onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): Promise<void> {
     this.context.getApplicationContext().setColorMode(ConfigurationConstant.ColorMode.COLOR_MODE_NOT_SET);
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onCreate');
+
+    // Initialize Database
+    await DatabaseService.init(this.context);
+
+    // Start sensor tracking for auto-habits
+    SensorTrackingService.instance.startTracking();
   }
 
   onDestroy(): void {
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onDestroy');
+    SensorTrackingService.instance.stopTracking();
   }
 
   onWindowStageCreate(windowStage: window.WindowStage): void {

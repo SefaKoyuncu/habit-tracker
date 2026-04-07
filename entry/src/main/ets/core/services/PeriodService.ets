@@ -1,19 +1,23 @@
 import { PeriodModel } from '../models/PeriodModel';
-import { RitualModel } from '../models/RitualModel';
+import { RitualModel, RitualType } from '../models/RitualModel';
+import { DatabaseService } from './DatabaseService';
 
 export interface RitualInput {
   title: string;
   time: string;
   color: string;
+  type?: RitualType;
+  targetValue?: number;
 }
 
 @ObservedV2
 export class PeriodService {
   @Trace periods: PeriodModel[] = [];
   private static _instance: PeriodService;
+  private db = DatabaseService.instance;
 
   private constructor() {
-    this.initializeSampleData();
+    this.initializeData();
   }
 
   static get instance(): PeriodService {
@@ -23,89 +27,85 @@ export class PeriodService {
     return PeriodService._instance;
   }
 
-  private initializeSampleData(): void {
-    this.periods = [
-      new PeriodModel(
-        1,
-        'Morning Ritual',
-        '10:00 AM',
-        '#4ea5d7',
-        [
-          new RitualModel(1, 'Drink water', '00:15', '#4ea5d7', true),
-          new RitualModel(2, 'Stretching', '00:10', '#4ea5d7')
-        ]
-      ),
-      new PeriodModel(
-        2,
-        'Afternoon Ritual',
-        '1:00 PM',
-        '#c8b049',
-        [
-          new RitualModel(3, 'Short walk', '00:20', '#c8b049'),
-          new RitualModel(4, 'Healthy lunch', '00:30', '#c8b049', true)
-        ]
-      ),
-      new PeriodModel(
-        3,
-        'Evening Ritual',
-        '8:00 PM',
-        '#1a365c',
-        [
-          new RitualModel(5, 'Read a book', '00:20', '#1a365c', true),
-          new RitualModel(6, 'Meditate', '00:10', '#1a365c')
-        ]
-      )
-    ];
-  }
+  private async initializeData(): Promise<void> {
+    // 1. Try to load from DB
+    let p1 = await this.db.loadRituals(1);
+    let p2 = await this.db.loadRituals(2);
+    let p3 = await this.db.loadRituals(3);
 
-  getPeriods(): PeriodModel[] {
-    return this.periods; // Returns the reactive array
-  }
+    // 2. If DB is empty, initialize with default data and save to DB
+    if (p1.length === 0 && p2.length === 0 && p3.length === 0) {
+      const defaultPeriods = [
+        new PeriodModel(1, 'Morning Ritual', '06:00 - 09:00', '#4ea5d7', [
+          new RitualModel(1, 'Drink water', '1 min', '#4ea5d7', true),
+          new RitualModel(2, 'Morning Breath', '3 min', '#4ea5d7', false, RitualType.BREATHING, 180),
+          new RitualModel(3, 'Quick Walk', '500 steps', '#4ea5d7', false, RitualType.STEPS, 500)
+        ]),
+        new PeriodModel(2, 'Afternoon Ritual', '12:00 - 14:00', '#c8b049', [
+          new RitualModel(4, 'Short walk', '1000 steps', '#c8b049', false, RitualType.STEPS, 1000),
+          new RitualModel(5, 'Healthy lunch', '30 min', '#c8b049', true)
+        ]),
+        new PeriodModel(3, 'Evening Ritual', '20:00 - 22:00', '#1a365c', [
+          new RitualModel(6, 'Read a book', '20 min', '#1a365c', true),
+          new RitualModel(7, 'Evening Meditate', '10 min', '#1a365c', false, RitualType.BREATHING, 600)
+        ])
+      ];
 
-  // Ritual Management
-  addRitual(periodId: number, ritual: RitualInput): void {
-    const period = this.periods.find(p => p.id === periodId);
-    if (period) {
-      const newId = Math.max(0, ...period.rituals.map(r => r.id)) + 1;
-      period.rituals = [
-        ...period.rituals,
-        new RitualModel(newId, ritual.title, ritual.time, ritual.color)
+      for (const p of defaultPeriods) {
+        for (const r of p.rituals) {
+          await this.db.saveRitual(p.id, r);
+        }
+      }
+      this.periods = defaultPeriods;
+    } else {
+      this.periods = [
+        new PeriodModel(1, 'Morning Ritual', '06:00 - 09:00', '#4ea5d7', p1),
+        new PeriodModel(2, 'Afternoon Ritual', '12:00 - 14:00', '#c8b049', p2),
+        new PeriodModel(3, 'Evening Ritual', '20:00 - 22:00', '#1a365c', p3)
       ];
     }
   }
 
-  toggleRitualCompletion(periodId: number, ritualId: number): void {
+  getPeriods(): PeriodModel[] {
+    return this.periods;
+  }
+
+  async addRitual(periodId: number, ritual: RitualInput): Promise<void> {
+    const period = this.periods.find(p => p.id === periodId);
+    if (period) {
+      const newId = Math.max(0, ...period.rituals.map(r => r.id)) + 1;
+      const newRitual = new RitualModel(
+        newId,
+        ritual.title,
+        ritual.time,
+        ritual.color,
+        false,
+        ritual.type || RitualType.NORMAL,
+        ritual.targetValue || 0
+      );
+      period.rituals = [...period.rituals, newRitual];
+      await this.db.saveRitual(periodId, newRitual);
+    }
+  }
+
+  async toggleRitualCompletion(periodId: number, ritualId: number): Promise<void> {
     const periodIndex = this.periods.findIndex(p => p.id === periodId);
-    if (periodIndex === -1) { return };
+    if (periodIndex === -1) return;
 
     const ritualIndex = this.periods[periodIndex].rituals.findIndex(r => r.id === ritualId);
-    if (ritualIndex === -1) { return };
+    if (ritualIndex === -1) return;
 
-    // Create new array with updated ritual
-    const updatedRituals = [...this.periods[periodIndex].rituals];
-    updatedRituals[ritualIndex] = new RitualModel(
-      updatedRituals[ritualIndex].id,
-      updatedRituals[ritualIndex].title,
-      updatedRituals[ritualIndex].time,
-      updatedRituals[ritualIndex].color,
-      !updatedRituals[ritualIndex].completed // Toggle completion status
-    );
+    const ritual = this.periods[periodIndex].rituals[ritualIndex];
+    ritual.completed = !ritual.completed;
 
-    // Create new periods array with updated period
-    const updatedPeriods = [...this.periods];
-    updatedPeriods[periodIndex] = new PeriodModel(
-      updatedPeriods[periodIndex].id,
-      updatedPeriods[periodIndex].title,
-      updatedPeriods[periodIndex].time,
-      updatedPeriods[periodIndex].color,
-      updatedRituals
-    );
+    // Persist to DB
+    await this.db.updateRitual(ritual);
 
-    this.periods = updatedPeriods; // Triggers reactive update
+    // Update reference to trigger reactivity
+    this.periods = [...this.periods];
   }
 
   getPeriodById(id: number): PeriodModel | undefined {
     return this.periods.find(period => period.id === id);
   }
-
 }

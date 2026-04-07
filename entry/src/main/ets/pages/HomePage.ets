@@ -53,20 +53,21 @@ export struct HomePage {
   @Consume('pageStack') pageStack: NavPathStack;
   private controller = PeriodService.instance;
   @State periodsProgress: number[] = [0, 0, 0];
-  private periodsDataSource: PeriodDataSource = new PeriodDataSource(this.controller.periods);
+  @State periodsDataSource: PeriodDataSource = new PeriodDataSource(this.controller.periods);
   @State screenWidth: number = 0;
   @State screenHeight: number = 0;
+
   private morningGradientColor: LinearGradient = new LinearGradient([
-    { color: Color.Yellow, offset: 0.5 },
-    { color: Color.Orange, offset: 1.0 }
+    { color: '#87CEEB', offset: 0.0 }, // Sky Blue
+    { color: '#4ea5d7', offset: 1.0 }
   ]);
   private afternoonGradientColor: LinearGradient = new LinearGradient([
-    { color: Color.Pink, offset: 0.5 },
-    { color: Color.Red, offset: 1.0 }
+    { color: '#F4D03F', offset: 0.0 }, // Gold
+    { color: '#c8b049', offset: 1.0 }
   ]);
   private eveningGradientColor: LinearGradient = new LinearGradient([
-    { color: Color.Blue, offset: 0.5 },
-    { color: Color.Black, offset: 1.0 }
+    { color: '#2C3E50', offset: 0.0 }, // Midnight Blue
+    { color: '#1a365c', offset: 1.0 }
   ]);
 
   async aboutToAppear() {
@@ -103,81 +104,58 @@ export struct HomePage {
     if (!period || period.rituals.length === 0) {
       return 0;
     }
-    const completedCount = period.rituals.filter(r => r.completed).length;
-    return Math.round((completedCount / period.rituals.length) * 100);
+    return period.progress;
   }
 
   private baseSize(): number {
-    if (this.screenWidth === 0 || this.screenHeight === 0) {
-      return 200;
-    }
-    return Math.min(this.screenWidth, this.screenHeight);
+    return Math.min(this.screenWidth || 200, this.screenHeight || 200);
   }
 
   private progressSize(): number {
-    return this.baseSize() * 0.16;
-  }
-
-  private progressStroke(): number {
-    return this.baseSize() * 0.025;
+    return this.baseSize() * 0.18;
   }
 
   private fontSmall(): number {
-    return this.baseSize() * 0.04;
+    return this.baseSize() * 0.045;
   }
 
   private fontMedium(): number {
-    return this.baseSize() * 0.05;
-  }
-
-  @Builder
-  private buildHeader() {
-    Column() {
-      if (this.periodsProgress.every(p => p === 100)) {
-        Row() {
-          Text('✅ All periods completed!')
-            .fontSize(this.fontMedium())
-            .fontWeight(FontWeight.Bold)
-            .fontColor(Color.Green)
-            .padding({ top: 20, bottom: 6 });
-        }
-        .justifyContent(FlexAlign.Center)
-        .margin({ bottom: 6 });
-      }
-    }
-    .margin({ bottom: 8 });
+    return this.baseSize() * 0.055;
   }
 
   @Builder
   private buildProgressRings() {
     Column() {
+      // Top Ring
       Column() {
         Progress({ value: this.periodsProgress[0], total: 100, type: ProgressType.Ring })
           .width(this.progressSize())
           .height(this.progressSize())
-          .style({ strokeWidth: this.progressStroke() })
+          .style({ strokeWidth: 5 })
           .color(this.morningGradientColor)
-          .backgroundColor('#F0F0F0')
-        Text(`Morning ${this.periodsProgress[0]}%`)
+          .backgroundColor('#222')
+        Text(`${this.periodsProgress[0]}%`)
           .fontSize(this.fontSmall())
           .margin({ top: 2 })
-          .fontColor('#000')
+          .fontColor($r('app.color.text_primary'))
       }
       .width('100%')
       .alignItems(HorizontalAlign.Center)
+      .margin({ top: 24 })
 
+      // Mid Row
       Row() {
         Column() {
           Progress({ value: this.periodsProgress[1], total: 100, type: ProgressType.Ring })
             .width(this.progressSize())
             .height(this.progressSize())
-            .style({ strokeWidth: this.progressStroke() })
+            .style({ strokeWidth: 5 })
             .color(this.afternoonGradientColor)
-            .backgroundColor('#F0F0F0')
-          Text(`Afternoon ${this.periodsProgress[1]}%`)
+            .backgroundColor('#222')
+          Text(`${this.periodsProgress[1]}%`)
             .fontSize(this.fontSmall())
             .margin({ top: 2 })
-            .fontColor('#000')
+            .fontColor($r('app.color.text_primary'))
         }
         .width('50%')
         .alignItems(HorizontalAlign.Center)
@@ -186,82 +164,78 @@ export struct HomePage {
           Progress({ value: this.periodsProgress[2], total: 100, type: ProgressType.Ring })
             .width(this.progressSize())
             .height(this.progressSize())
-            .style({ strokeWidth: this.progressStroke() })
+            .style({ strokeWidth: 5 })
             .color(this.eveningGradientColor)
-            .backgroundColor('#F0F0F0')
-          Text(`Evening ${this.periodsProgress[2]}%`)
+            .backgroundColor('#222')
+          Text(`${this.periodsProgress[2]}%`)
             .fontSize(this.fontSmall())
             .margin({ top: 2 })
-            .fontColor('#000')
+            .fontColor($r('app.color.text_primary'))
         }
         .width('50%')
         .alignItems(HorizontalAlign.Center)
       }
-      .margin({ bottom: 8 })
-
-      Row() {
-        Text('Lets close all the rituals of the day! 💪')
-          .fontSize(this.fontMedium())
-          .fontColor('#000')
-          .fontWeight(FontWeight.Bold)
-      }
-      .justifyContent(FlexAlign.Center)
-    }
-    .margin({ bottom: 8 })
-  }
-
-  @Builder
-  private buildPeriodsList() {
-    Column() {
-      LazyForEach(
-        this.periodsDataSource,
-        (period: PeriodModel) => {
-          Row() {
-            Column() {
-              Text(period.title)
-                .fontSize(this.fontSmall())
-                .fontColor('#FFF');
-              Text(period.time)
-                .fontSize(this.fontMedium())
-                .fontColor('#FFF');
-            }
-            .height('100%');
-          }
-          .width('100%')
-          .height(this.baseSize() * 0.14)
-          .margin(3)
-          .padding(6)
-          .borderRadius(10)
-          .backgroundColor(period.color)
-          .onClick(() => {
-            this.pageStack.pushPathByName('Period', period.id);
-          });
-        },
-        (period: PeriodModel) => period.id.toString()
-      );
+      .margin({ top: 8, bottom: 12 })
     }
   }
 
   build() {
     NavDestination() {
-      Scroll() {
-        Column() {
-          this.buildHeader();
-          this.buildProgressRings();
-          this.buildPeriodsList();
+      ArcList({ initialIndex: 0 }) {
+        ArcListItem() {
+          Column() {
+            if (this.periodsProgress.every(p => p === 100)) {
+              Text($r('app.string.all_completed'))
+                .fontSize(this.fontMedium())
+                .fontWeight(FontWeight.Bold)
+                .fontColor(Color.Green)
+                .margin({ top: 10 })
+            }
+            this.buildProgressRings()
+            Text($r('app.string.motivation_text'))
+              .fontSize(this.fontMedium())
+              .fontColor($r('app.color.text_primary'))
+              .fontWeight(FontWeight.Bold)
+              .margin({ bottom: 20 })
+          }
+          .width('100%')
         }
+
+        LazyForEach(this.periodsDataSource, (period: PeriodModel) => {
+          ArcListItem() {
+            Row() {
+              Column() {
+                Text(period.title)
+                  .fontSize(this.fontMedium())
+                  .fontWeight(FontWeight.Bold)
+                  .fontColor(Color.White);
+                Text(period.time)
+                  .fontSize(this.fontSmall())
+                  .fontColor('#DDD')
+                  .margin({ top: 2 });
+              }
+              .alignItems(HorizontalAlign.Start)
+              .layoutWeight(1)
+
+              Text(`${period.progress}%`)
+                .fontSize(this.fontMedium())
+                .fontColor(Color.White)
+                .fontWeight(FontWeight.Bold)
+            }
+            .width('85%')
+            .padding(16)
+            .borderRadius(25)
+            .backgroundColor(period.color)
+            .onClick(() => {
+              this.pageStack.pushPathByName('Period', period.id);
+            });
+          }
+        }, (period: PeriodModel) => period.id.toString())
       }
-      .scrollable(ScrollDirection.Vertical)
-      .scrollBar(BarState.Off)
       .width('100%')
       .height('100%')
-      .backgroundColor('#FFF')
-      .padding({
-        top: 8,
-        bottom: 16,
-        left: 12,
-        right: 12
-      });
+      .backgroundColor($r('app.color.page_background'))
+      .scrollBar(BarState.Off)
     }.onReady((ctx: NavDestinationContext) => {
       this.pageStack = ctx.pathStack;
     })
