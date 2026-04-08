@@ -2,15 +2,35 @@
   "string": [
     {
       "name": "module_desc",
-      "value": "module description"
+      "value": "Advanced Wearable Habit Tracker for HarmonyOS"
     },
     {
       "name": "EntryAbility_desc",
-      "value": "description"
+      "value": "Track daily rituals and growth habits with haptic coaching and auto-detection."
     },
     {
       "name": "EntryAbility_label",
-      "value": "label"
+      "value": "Habit Tracker"
+    },
+    {
+      "name": "morning_ritual",
+      "value": "Morning Ritual"
+    },
+    {
+      "name": "afternoon_ritual",
+      "value": "Afternoon Ritual"
+    },
+    {
+      "name": "evening_ritual",
+      "value": "Evening Ritual"
+    },
+    {
+      "name": "all_completed",
+      "value": "✅ All periods completed!"
+    },
+    {
+      "name": "motivation_text",
+      "value": "Close all the rituals! 💪"
     }
   ]
 }

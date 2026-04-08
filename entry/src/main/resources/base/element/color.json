@@ -2,7 +2,35 @@
   "color": [
     {
       "name": "start_window_background",
+      "value": "#000000"
+    },
+    {
+      "name": "page_background",
+      "value": "#000000"
+    },
+    {
+      "name": "text_primary",
       "value": "#FFFFFF"
+    },
+    {
+      "name": "text_secondary",
+      "value": "#CCCCCC"
+    },
+    {
+      "name": "progress_bg",
+      "value": "#1C1C1E"
+    },
+    {
+      "name": "morning_color",
+      "value": "#4ea5d7"
+    },
+    {
+      "name": "afternoon_color",
+      "value": "#c8b049"
+    },
+    {
+      "name": "evening_color",
+      "value": "#1a365c"
     }
   ]
 }

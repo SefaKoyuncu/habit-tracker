@@ -1,11 +1,15 @@
 import { PeriodService } from '../core/services/PeriodService';
+import { RitualType } from '../core/models/RitualModel';
 import display from '@ohos.display';
+import { vibrator } from '@kit.SensorServiceKit';
 
 interface RitualDisplay {
   id: number;
   title: string;
   time: string;
   color: string;
+  type: RitualType;
+  targetValue: number;
 }
 
 @Component
@@ -14,9 +18,14 @@ export struct Period {
   private controller = PeriodService.instance;
   @State periodId: number = -1;
   @State currentRitual: RitualDisplay | null = null;
-  @State showCompletionMessage: boolean = false;
-  private screenWidth: number = 0;
-  private screenHeight: number = 0;
+  @State isFinished: boolean = false;
+  @State screenWidth: number = 0;
+  @State screenHeight: number = 0;
+
+  // Breathing state
+  @State isBreathing: boolean = false;
+  @State breathTimer: number = 0;
+  private breathIntervalId: number = -1;
 
   async aboutToAppear(): Promise<void> {
     try {
@@ -28,149 +37,182 @@ export struct Period {
     }
   }
 
+  aboutToDisappear() {
+    this.stopBreathing();
+  }
+
   private loadNextRitual(): void {
     const period = this.controller.getPeriodById(this.periodId);
     if (!period) {
-      console.error('Period not found');
       this.pageStack.pop()
       return;
     }
     const nextRitual = period.rituals.find(r => !r.completed);
-    this.showCompletionMessage = !nextRitual;
     if (nextRitual) {
+      this.isFinished = false;
       this.currentRitual = {
         id: nextRitual.id,
         title: nextRitual.title,
         time: nextRitual.time,
-        color: nextRitual.color
+        color: nextRitual.color,
+        type: nextRitual.type,
+        targetValue: nextRitual.targetValue
       };
+      if (this.currentRitual.type === RitualType.BREATHING) {
+        this.breathTimer = this.currentRitual.targetValue;
+      }
     } else {
       this.currentRitual = null;
+      this.isFinished = true;
     }
   }
 
   private completeCurrentRitual(): void {
-    if (!this.currentRitual) {
-      return;
-    }
+    if (!this.currentRitual) return;
+    this.stopBreathing();
     this.controller.toggleRitualCompletion(this.periodId, this.currentRitual.id);
     this.loadNextRitual();
   }
 
+  private startBreathing() {
+    if (!this.currentRitual || this.isBreathing) return;
+    this.isBreathing = true;
+
+    this.breathIntervalId = setInterval(() => {
+      if (this.breathTimer > 0) {
+        this.breathTimer--;
+        // Haptic feedback every 4 seconds
+        if (this.breathTimer % 4 === 0) {
+          this.triggerHaptic('haptic.clock.timer');
+        }
+      } else {
+        this.completeCurrentRitual();
+      }
+    }, 1000);
+  }
+
+  private stopBreathing() {
+    this.isBreathing = false;
+    if (this.breathIntervalId !== -1) {
+      clearInterval(this.breathIntervalId);
+      this.breathIntervalId = -1;
+    }
+  }
+
+  private triggerHaptic(effectId: string) {
+    try {
+      vibrator.startVibration({
+        type: 'preset',
+        effectId: effectId,
+        count: 1
+      }, { usage: 'alarm' });
+    } catch (err) {
+      console.error('Haptic failed:', err);
+    }
+  }
+
   private baseSize(): number {
-    if (this.screenWidth === 0 || this.screenHeight === 0) {
-      return 200;
-    }
-    return Math.min(this.screenWidth, this.screenHeight);
-  }
-
-  private fontSmall(): number {
-    return this.baseSize() * 0.045;
-  }
-
-  private fontMedium(): number {
-    return this.baseSize() * 0.06;
-  }
-
-  private fontLarge(): number {
-    return this.baseSize() * 0.08;
-  }
-
-  private buttonHeight(): number {
-    return this.baseSize() * 0.12;
+    return Math.min(this.screenWidth || 200, this.screenHeight || 200);
   }
 
   @Builder
-  private renderCompletionButton() {
-    Button() {
-      Text('Complete ✅').fontSize(this.fontSmall());
-    }
-    .width('100%')
-    .height(this.buttonHeight())
-    .backgroundColor('#4CAF50')
-    .onClick(() => this.completeCurrentRitual());
-  }
+  private renderBreathingUI() {
+    Column() {
+      Stack() {
+        Progress({ value: this.breathTimer, total: this.currentRitual?.targetValue || 100, type: ProgressType.Ring })
+          .width(this.baseSize() * 0.55)
+          .height(this.baseSize() * 0.55)
+          .style({ strokeWidth: 8 })
+          .color(this.currentRitual?.color || Color.Blue)
+          .backgroundColor('#111')
 
-  @Builder
-  private renderBackButton() {
-    Button() {
-      Text('Back ↩️').fontSize(this.fontSmall());
+        Column() {
+          Text(`${this.breathTimer}s`)
+            .fontSize(this.baseSize() * 0.12)
+            .fontColor(Color.White)
+            .fontWeight(FontWeight.Bold)
+          Text(this.isBreathing ? 'Breathe...' : 'Ready?')
+            .fontSize(this.baseSize() * 0.04)
+            .fontColor('#AAA')
+        }
+      }
+      .margin({ top: 10, bottom: 20 })
+
+      Button(this.isBreathing ? 'Pause' : 'Start')
+        .onClick(() => this.isBreathing ? this.stopBreathing() : this.startBreathing())
+        .width('55%')
+        .height(this.baseSize() * 0.15)
+        .borderRadius(this.baseSize() * 0.08)
+        .backgroundColor(this.isBreathing ? '#333' : Color.Green)
     }
-    .width('100%')
-    .height(this.buttonHeight())
-    .backgroundColor('#6c757d')
-    .onClick(() => this.pageStack.pop());
   }
 
   build() {
     NavDestination() {
       Column() {
-        Column() {
-          if (this.showCompletionMessage) {
-            Text('All rituals completed! 🎉')
-              .fontSize(this.fontLarge())
-              .fontColor('#28a745')
-              .margin({ bottom: 20 });
-          } else if (this.currentRitual) {
-            Column() {
-              Text(this.currentRitual.title)
-                .fontSize(this.fontLarge())
-                .fontWeight(FontWeight.Bold)
-                .fontColor(this.currentRitual.color);
-              Text(`Duration: ${this.currentRitual.time}`)
-                .fontSize(this.fontSmall())
-                .margin({ top: 10 })
-                .fontColor('black');
-            }
-            .justifyContent(FlexAlign.Center)
-            .alignItems(HorizontalAlign.Center)
-            .margin({ bottom: 20 });
-          } else {
-            Text('Loading...')
-              .fontSize(this.fontMedium())
-              .fontColor('#999');
-          }
-        }
-        .width('100%')
-        .justifyContent(FlexAlign.Center)
-        .alignItems(HorizontalAlign.Center);
-
-        Row() {
+        if (this.isFinished) {
           Column() {
-            this.renderBackButton();
-          }
-          .width(this.currentRitual && !this.showCompletionMessage ? '48%' : '100%');
+            Text('Rituals Complete! 🎉')
+              .fontSize(this.baseSize() * 0.08)
+              .fontWeight(FontWeight.Bold)
+              .fontColor(Color.Green)
+              .textAlign(TextAlign.Center)
 
-          if (this.currentRitual && !this.showCompletionMessage) {
+            Text('Excellent progress today.')
+              .fontSize(this.baseSize() * 0.04)
+              .fontColor('#AAA')
+              .margin({ top: 8, bottom: 30 })
+
+            Button('Finish')
+              .onClick(() => this.pageStack.pop())
+              .backgroundColor('#222')
+              .width('50%')
+              .borderRadius(20)
+          }
+          .padding(20)
+        } else if (this.currentRitual) {
+          // Header
+          Text(this.currentRitual.title)
+            .fontSize(this.baseSize() * 0.07)
+            .fontWeight(FontWeight.Bold)
+            .fontColor(Color.White)
+            .margin({ top: 10 })
+
+          if (this.currentRitual.type === RitualType.BREATHING) {
+            this.renderBreathingUI();
+          } else {
             Column() {
-              this.renderCompletionButton();
+              Text(this.currentRitual.time)
+                .fontSize(this.baseSize() * 0.06)
+                .fontColor(this.currentRitual.color)
+                .fontWeight(FontWeight.Medium)
+                .margin({ top: 40, bottom: 40 })
+
+              Row() {
+                Button('Skip')
+                  .onClick(() => this.pageStack.pop())
+                  .backgroundColor('#222')
+                  .width('42%')
+
+                Button('Done')
+                  .onClick(() => this.completeCurrentRitual())
+                  .backgroundColor(Color.Green)
+                  .width('42%')
+              }
+              .width('95%')
+              .justifyContent(FlexAlign.SpaceEvenly)
             }
-            .width('48%');
           }
         }
-        .width('100%')
-        .justifyContent(FlexAlign.SpaceBetween);
       }
       .width('100%')
       .height('100%')
-      .padding({
-        top: 10,
-        bottom: 0,
-        left: 20,
-        right: 20
-      })
-      .backgroundColor('#FFF')
+      .backgroundColor(Color.Black)
       .justifyContent(FlexAlign.Center)
-      .alignItems(HorizontalAlign.Center);
-    }.onReady((ctx: NavDestinationContext) => {
+    }
+    .onReady((ctx: NavDestinationContext) => {
       this.pageStack = ctx.pathStack;
-      const periodId = ctx.pathInfo.param as number;
-      if (isNaN(periodId)) {
-        console.error('Invalid period ID');
-        this.pageStack.pop()
-        return;
-      }
-      this.periodId = periodId;
+      this.periodId = ctx.pathInfo.param as number;
       this.loadNextRitual();
     })
     .hideBackButton(true)
