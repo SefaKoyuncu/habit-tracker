@@ -1,6 +1,7 @@
 import { PeriodModel } from '../core/models/PeriodModel';
 import { PeriodService } from '../core/services/PeriodService';
 import display from '@ohos.display';
+import { hilog } from '@kit.PerformanceAnalysisKit';
 
 @Component
 export struct HomePage {
@@ -23,30 +24,31 @@ export struct HomePage {
   ]);
 
   async aboutToAppear() {
-    await this.controller.initializeData();
+    hilog.info(0x0001, 'HomePage', 'aboutToAppear');
     try {
+      // Set a timeout for loading to prevent permanent loading screen
+      setTimeout(() => {
+        if (!this.controller.isLoaded) {
+          hilog.warn(0x0001, 'HomePage', 'Loading timed out, forcing display');
+          this.controller.isLoaded = true;
+        }
+      }, 3000);
+
+      await this.controller.initializeData();
       const defaultDisplay = await display.getDefaultDisplaySync();
       this.screenWidth = defaultDisplay.width;
       this.screenHeight = defaultDisplay.height;
     } catch (err) {
-      console.error('Failed to get display info:', err);
+      hilog.error(0x0001, 'HomePage', 'Error in aboutToAppear: %{public}s', JSON.stringify(err));
     }
   }
 
   private baseSize(): number {
-    return Math.min(this.screenWidth || 200, this.screenHeight || 200);
+    return Math.min(this.screenWidth || 240, this.screenHeight || 240);
   }
 
   private progressSize(): number {
     return this.baseSize() * 0.22;
-  }
-
-  private fontSmall(): number {
-    return this.baseSize() * 0.045;
-  }
-
-  private fontMedium(): number {
-    return this.baseSize() * 0.06;
   }
 
   @Builder
@@ -75,27 +77,9 @@ export struct HomePage {
       })
 
       Text(label)
-        .fontSize(this.fontSmall())
+        .fontSize(this.baseSize() * 0.045)
         .margin({ top: 4 })
         .fontColor('#AAA')
-    }
-  }
-
-  @Builder
-  private buildProgressSection() {
-    Column() {
-      // Top Center Ring
-      this.buildProgressRing(0, this.morningGradientColor, 'Morning')
-        .margin({ top: 10 })
-
-      // Side by Side Rings
-      Row() {
-        this.buildProgressRing(1, this.afternoonGradientColor, 'Afternoon')
-        this.buildProgressRing(2, this.eveningGradientColor, 'Evening')
-      }
-      .width('100%')
-      .justifyContent(FlexAlign.SpaceEvenly)
-      .margin({ top: 10, bottom: 20 })
     }
   }
 
@@ -104,11 +88,11 @@ export struct HomePage {
     Row() {
       Column() {
         Text(period.title)
-          .fontSize(this.fontMedium())
+          .fontSize(this.baseSize() * 0.06)
           .fontWeight(FontWeight.Bold)
           .fontColor(Color.White);
         Text(period.time)
-          .fontSize(this.fontSmall())
+          .fontSize(this.baseSize() * 0.045)
           .fontColor('#BBB')
           .margin({ top: 2 });
       }
@@ -123,7 +107,6 @@ export struct HomePage {
     .margin({ bottom: 12 })
     .borderRadius(24)
     .backgroundColor('#1A1A1A')
-    .border({ width: 1, color: '#333' })
     .onClick(() => {
       this.pageStack.pushPathByName('Period', period.id);
     });
@@ -131,35 +114,48 @@ export struct HomePage {
 
   build() {
     NavDestination() {
-      if (!this.controller.isLoaded) {
-        Column() {
-          LoadingProgress().width(40).height(40).color(Color.White)
-        }
-        .width('100%')
-        .height('100%')
-        .justifyContent(FlexAlign.Center)
-        .backgroundColor(Color.Black)
-      } else {
-        Scroll() {
+      Stack() {
+        if (!this.controller.isLoaded) {
           Column() {
-            // Header Space for Watch Curve
-            Blank().height(30)
-
-            this.buildProgressSection()
-
-            ForEach(this.controller.periods, (period: PeriodModel) => {
-              this.buildPeriodCard(period)
-            }, (period: PeriodModel) => period.id.toString())
-
-            // Footer Space for Watch Curve
-            Blank().height(40)
+            LoadingProgress().width(50).height(50).color(Color.White)
+            Text('Syncing Habits...').fontColor('#666').margin({ top: 10 })
           }
           .width('100%')
+          .height('100%')
+          .justifyContent(FlexAlign.Center)
+          .backgroundColor(Color.Black)
+        } else {
+          Scroll() {
+            Column() {
+              Blank().height(30)
+
+              // Rings Section
+              Column() {
+                this.buildProgressRing(0, this.morningGradientColor, 'Morning')
+                  .margin({ bottom: 15 })
+
+                Row() {
+                  this.buildProgressRing(1, this.afternoonGradientColor, 'Afternoon')
+                  this.buildProgressRing(2, this.eveningGradientColor, 'Evening')
+                }
+                .width('100%')
+                .justifyContent(FlexAlign.SpaceEvenly)
+                .margin({ bottom: 25 })
+              }
+
+              ForEach(this.controller.periods, (period: PeriodModel) => {
+                this.buildPeriodCard(period)
+              }, (period: PeriodModel) => period.id.toString())
+
+              Blank().height(60)
+            }
+            .width('100%')
+          }
+          .width('100%')
+          .height('100%')
+          .backgroundColor(Color.Black)
+          .scrollBar(BarState.Off)
         }
-        .width('100%')
-        .height('100%')
-        .backgroundColor(Color.Black)
-        .scrollBar(BarState.Off)
       }
     }.onReady((ctx: NavDestinationContext) => {
       this.pageStack = ctx.pathStack;
